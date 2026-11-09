@@ -45,6 +45,10 @@ jobs:
           git clone --depth 1 --branch v3.4 --recursive \
             https://github.com/espressif/ESP8266_RTOS_SDK.git "$sdk_path"
           "$sdk_path/install.sh"
+          # ESP8266 RTOS SDK v3.4's dependency checker imports pkg_resources,
+          # which was removed from setuptools 82. Keep its private env compatible.
+          python_env="$(find "$IDF_TOOLS_PATH/python_env" -mindepth 1 -maxdepth 1 -type d -name 'rtos3.4_py*_env' -print -quit)"
+          "$python_env/bin/python" -m pip install 'setuptools<82'
           export IDF_PATH="$sdk_path"
           # The SDK's export script configures the toolchain and its Python environment.
           source "$sdk_path/export.sh"
