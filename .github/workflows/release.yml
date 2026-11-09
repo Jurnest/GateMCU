@@ -1,0 +1,94 @@
+name: Build, release, and publish firmware installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out GateMCU and its components
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison ccache cmake dfu-util flex gperf libffi-dev libssl-dev \
+            libusb-1.0-0 make ninja-build python-is-python3 python3 \
+            python3-pip python3-setuptools python3-venv wget
+
+      - name: Build with ESP8266 RTOS SDK v3.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_path="$RUNNER_TEMP/ESP8266_RTOS_SDK"
+          export IDF_TOOLS_PATH="$RUNNER_TEMP/esp-tools"
+          git clone --depth 1 --branch v3.4 --recursive \
+            https://github.com/espressif/ESP8266_RTOS_SDK.git "$sdk_path"
+          "$sdk_path/install.sh"
+          export IDF_PATH="$sdk_path"
+          # The SDK's export script configures the toolchain and its Python environment.
+          source "$sdk_path/export.sh"
+          make defconfig
+          make -j"$(nproc)"
+          test -s build/GateMCU.bin
+
+      - name: Prepare installer and release files
+        run: |
+          python3 scripts/generate_web_manifest.py \
+            --version "$GITHUB_REF_NAME" \
+            --build-dir build \
+            --sdkconfig sdkconfig \
+            --output-dir web
+
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --title "GateMCU $tag" \
+              --generate-notes \
+              --draft
+          fi
+          gh release upload "$tag" \
+            "web/firmware.bin#GateMCU-${tag}.bin" \
+            "web/bootloader.bin#GateMCU-${tag}-bootloader.bin" \
+            "web/partitions.bin#GateMCU-${tag}-partitions.bin" \
+            "web/manifest.json#GateMCU-${tag}-manifest.json" \
+            --clobber
+          gh release edit "$tag" --draft=false
+
+      - name: Upload installer site for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy installer site
+        id: deployment
+        uses: actions/deploy-pages@v4

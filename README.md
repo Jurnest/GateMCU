@@ -37,6 +37,12 @@ make
 make flash
 ```
 
+## Browser installer
+
+GateMCU firmware releases include a browser installer for ESP8266 NodeMCU boards. Open the GitHub Pages installer in Chrome or Edge, connect the board over USB, and follow the prompts. Use a USB data cable and close any other serial monitor first. Installing firmware may erase saved device settings.
+
+To publish a release, push a version tag such as `v1.0.0`. GitHub Actions builds the firmware with ESP8266 RTOS SDK v3.4, attaches the binaries to the GitHub Release, and publishes the installer to GitHub Pages. Enable **Settings → Pages → Source → GitHub Actions** once in the repository.
+
 ## License
 
 GateMCU is licensed under the Apache License 2.0; see [`LICENSE`](LICENSE).

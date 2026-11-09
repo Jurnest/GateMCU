@@ -1,0 +1,80 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #000000;
+  color: #f5f6f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --muted: #8a8a8a;
+  --line: #262626;
+  --surface: #0a0a0a;
+  --blue: #3b82f6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: #000000;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.page { width: min(100% - 40px, 920px); margin: 0 auto; }
+
+.topbar {
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { display: inline-flex; align-items: center; gap: 11px; font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
+.brand-mark { width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid var(--blue); border-radius: 2px; color: var(--blue); font-size: 13px; font-weight: 700; }
+.source-link, .footer { color: var(--muted); font-size: 12px; }
+.source-link:hover, .footer a:hover { color: #fff; }
+
+.installer { width: min(100%, 640px); margin: 104px auto 72px; }
+.eyebrow { display: flex; align-items: center; gap: 9px; color: #a4abb6; font-size: 12px; font-weight: 600; letter-spacing: .045em; text-transform: uppercase; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #56d38a; }
+h1 { margin: 20px 0 10px; font-size: clamp(34px, 6vw, 48px); line-height: 1.08; letter-spacing: -.055em; }
+.intro { max-width: 480px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+
+.install-box { margin-top: 38px; padding: 20px; display: flex; align-items: center; justify-content: space-between; gap: 22px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
+.install-copy { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.chip-icon { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 3px; color: var(--blue); }
+.chip-icon svg { width: 22px; height: 22px; }
+.install-copy strong, .install-copy span { display: block; }
+.install-copy strong { font-size: 13px; font-weight: 600; }
+.install-copy span { margin-top: 5px; color: var(--muted); font-size: 12px; }
+
+esp-web-install-button { display: inline-flex; flex: 0 0 auto; }
+esp-web-install-button::part(button) { min-height: 42px; padding: 0 17px; border: 0; border-radius: 6px; background: #f4f5f7; color: #111318; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+esp-web-install-button::part(button):hover { background: #dfe4ec; }
+esp-web-install-button::part(button):focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+esp-web-install-button [slot="unsupported"] { color: #ffb4ab; font-size: 12px; line-height: 1.5; }
+
+.notice { margin: 15px 0 0; padding: 13px 15px; border: 1px solid #4b3b1c; border-radius: 3px; background: #111111; color: #c8b78e; font-size: 12px; line-height: 1.6; }
+.notice strong { color: #f59e0b; font-weight: 650; }
+.steps { margin-top: 46px; }
+.steps h2 { margin: 0 0 16px; font-size: 14px; font-weight: 650; }
+.steps ol { margin: 0; padding-left: 21px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.steps li { padding-left: 4px; margin: 7px 0; }
+.steps strong { color: #e6e8ec; font-weight: 600; }
+.footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--line); line-height: 1.6; }
+.footer a { flex: 0 0 auto; color: #c1c7d0; }
+
+@media (max-width: 600px) {
+  .page { width: min(100% - 32px, 920px); }
+  .topbar { height: 64px; }
+  .source-link { font-size: 11px; }
+  .installer { margin-top: 68px; }
+  .install-box { align-items: stretch; flex-direction: column; padding: 17px; }
+  esp-web-install-button { width: 100%; }
+  esp-web-install-button::part(button) { width: 100%; }
+  .footer { flex-direction: column; gap: 8px; margin-top: 42px; }
+}

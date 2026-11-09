@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#08090b">
+    <meta name="description" content="Install GateMCU on an ESP8266 NodeMCU board over USB.">
+    <title>GateMCU · Firmware installer</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+    <script
+      type="module"
+      src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+    ></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="GateMCU installer home">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span>GateMCU</span>
+        </a>
+        <a class="source-link" href="https://github.com/Jurnest/GateMCU">GitHub repository <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <section class="installer" aria-labelledby="title">
+        <div class="eyebrow"><span class="live-dot"></span> ESP8266 · USB installer</div>
+        <h1 id="title">Install GateMCU</h1>
+        <p class="intro">Flash the latest GateMCU firmware to your NodeMCU directly from this browser.</p>
+
+        <div class="install-box">
+          <div class="install-copy">
+            <div class="chip-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="6" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5" />
+                <path d="M9 1.75v3M15 1.75v3M9 19.25v3M15 19.25v3M1.75 9h3M1.75 15h3M19.25 9h3M19.25 15h3M10 10h4v4h-4z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <strong>GateMCU for NodeMCU ESP8266</strong>
+              <span id="version">Latest stable firmware</span>
+            </div>
+          </div>
+          <esp-web-install-button manifest="./manifest.json">
+            <span slot="unsupported">Use Chrome, Edge, or another browser with Web Serial support.</span>
+          </esp-web-install-button>
+        </div>
+
+        <p class="notice"><strong>Existing device:</strong> installing firmware can erase saved Wi-Fi, password, WireGuard, and forwarding settings. Save anything you need before continuing.</p>
+
+        <section class="steps" aria-labelledby="steps-title">
+          <h2 id="steps-title">Before you install</h2>
+          <ol>
+            <li>Use Chrome or Microsoft Edge on a desktop computer.</li>
+            <li>Connect the NodeMCU with a USB data cable and close other serial monitor tabs.</li>
+            <li>Select <strong>Install GateMCU</strong>, choose the device’s serial port, then confirm.</li>
+          </ol>
+        </section>
+
+        <footer class="footer">
+          <span>USB flashing uses Web Serial. iPhone and iPad browsers are not supported.</span>
+          <a href="https://github.com/Jurnest/GateMCU/releases">Release files</a>
+        </footer>
+      </section>
+    </main>
+    <script>
+      fetch('./manifest.json')
+        .then((response) => response.ok ? response.json() : null)
+        .then((manifest) => {
+          if (manifest && manifest.version) {
+            document.querySelector('#version').textContent = `Version ${manifest.version}`;
+          }
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>
