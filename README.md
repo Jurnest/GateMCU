@@ -1,47 +1,54 @@
 # GateMCU
 
-GateMCU turns an ESP8266 NodeMCU into a small WireGuard-connected gateway for devices on a home network. It provides a web interface for Wi-Fi, WireGuard, TCP port-forwarding rules and recent connection activity.
+GateMCU turns an ESP8266 NodeMCU into a small WireGuard gateway for devices on a home network. Configure the device from its web interface, connect it to your VPN server, and forward TCP ports to services on your LAN.
 
-## First-time setup
+## Install from a browser
 
-1. Power on the NodeMCU and connect to the `GateMCU-Setup` Wi-Fi network. Its password is `GateMCU-Setup`.
-2. Open `http://192.168.4.1` if the setup page does not open automatically.
-3. Enter the home Wi-Fi name and password, then choose an admin password for GateMCU.
-4. After it connects, open the device’s IP address shown on the setup page. GateMCU keeps its saved network settings across restarts.
+Use the [GateMCU web installer](https://jurnest.github.io/GateMCU/) to flash a NodeMCU over USB.
 
-The admin password is used in the page’s login form. There is no username.
+1. Open the installer in desktop Chrome or Microsoft Edge. The browser must support Web Serial; Safari is not supported.
+2. Connect the NodeMCU with a USB data cable and select its serial port. It may appear as `USB2.0-Serial`, `CH340`, or `CP210x` with a COM port number.
+3. Choose **Install GateMCU**, confirm the device, and wait for flashing to finish.
+4. Connect to the `GateMCU-Setup` Wi-Fi network. Its default password is `GateMCU-Setup`.
+5. If the setup page does not open automatically, visit [http://192.168.4.1](http://192.168.4.1). Enter your Wi-Fi credentials and choose a GateMCU password.
+6. After the device connects to your home network, open the IP address shown on the setup page.
 
-## Web interface
+Installing or reinstalling firmware can erase saved device settings. Save any configuration you need before flashing.
 
-- **Overview** shows Wi-Fi and WireGuard status, device memory and storage use, and the number of forwarding rules.
-- **WireGuard** accepts a client `.conf` configuration and controls the tunnel.
-- **Port forwarding** adds, edits and deletes up to three TCP rules. Each rule maps a port on the WireGuard address to an IPv4 address and port on the home LAN.
-- **Event log** shows recent TCP forwarding connections, results, transferred data and transfer time. It is stored in RAM and holds up to 24 events from the last 30 minutes.
-- **Settings** changes Wi-Fi and IP settings, the admin password, and restarts the device.
+## Configure GateMCU
 
-To clear saved settings and return to setup, hold the NodeMCU **FLASH** button for 5–7 seconds, then release it. The onboard LED blinks three times before restart.
+Sign in with the password chosen during setup; there is no username.
 
-## Build and flash
+- **WireGuard:** enter a client configuration and activate or deactivate the tunnel.
+- **Port forwarding:** add, edit, or delete up to three TCP rules. Each rule maps a port on the VPN address to an IPv4 address and port on your home network.
+- **Event log:** view up to 24 recent TCP forwarding events, held in RAM for up to 30 minutes.
+- **Settings:** change Wi-Fi and IP configuration, update the GateMCU password, or restart the device.
 
-Requirements:
+To clear saved settings and return to initial setup, hold the NodeMCU **FLASH** button for 5–7 seconds, then release it. The onboard LED blinks three times before restart.
 
-- ESP8266 RTOS SDK v3.4
-- Xtensa LX106 toolchain
-- NodeMCU ESP8266 connected over USB
+## Build and flash from source
 
-Set `IDF_PATH` to the SDK directory, ensure the toolchain is on `PATH`, then run:
+The GitHub release workflow uses ESP8266 RTOS SDK v3.4 and the existing Make-based build system. For a local build, install that SDK and its Xtensa LX106 toolchain, then set `IDF_PATH` to the SDK directory:
 
 ```sh
-make menuconfig
+source "$IDF_PATH/export.sh"
+make defconfig
 make
-make flash
 ```
 
-## Browser installer
+To build and flash over USB, specify your serial port if needed:
 
-GateMCU firmware releases include a browser installer for ESP8266 NodeMCU boards. Open the GitHub Pages installer in Chrome or Edge, connect the board over USB, and follow the prompts. Use a USB data cable and close any other serial monitor first. Installing firmware may erase saved device settings.
+```sh
+make flash ESPPORT=/dev/ttyUSB0
+```
 
-To publish a release, push a version tag such as `v1.0.0`. GitHub Actions builds the firmware with ESP8266 RTOS SDK v3.4, attaches the binaries to the GitHub Release, and publishes the installer to GitHub Pages. Enable **Settings → Pages → Source → GitHub Actions** once in the repository.
+On Windows, the port can be specified as `ESPPORT=COM3` when using a compatible SDK shell.
+
+## Releases and GitHub Pages
+
+Push a version tag such as `v0.1.0` to build a release. GitHub Actions compiles the firmware, uploads the firmware and flash components to GitHub Releases, generates the ESP Web Tools manifest from the build outputs, and publishes the installer site.
+
+Enable **Settings → Pages → Source → GitHub Actions**. In **Settings → Environments → github-pages**, allow deployment tags matching `v*` so version releases can publish the installer.
 
 ## License
 
