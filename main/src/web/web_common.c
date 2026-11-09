@@ -47,6 +47,21 @@ bool web_get_form_value(const char *body, const char *name, char *out, size_t ca
     return false;
 }
 
+bool web_read_body(httpd_req_t *req, char *out, size_t capacity)
+{
+    if (!req || !out || req->content_len <= 0 || (size_t)req->content_len >= capacity) return false;
+    size_t received_total = 0;
+    unsigned timeouts = 0;
+    while (received_total < (size_t)req->content_len) {
+        int received = httpd_req_recv(req, out + received_total, req->content_len - received_total);
+        if (received == HTTPD_SOCK_ERR_TIMEOUT && timeouts++ < 3) continue;
+        if (received <= 0) return false;
+        received_total += (size_t)received;
+    }
+    out[received_total] = '\0';
+    return true;
+}
+
 esp_err_t web_send_error(httpd_req_t *req, const char *message)
 {
     httpd_resp_set_status(req, "400 Bad Request");
@@ -54,6 +69,7 @@ esp_err_t web_send_error(httpd_req_t *req, const char *message)
 }
 
 static char session_token[33];
+static char session_cookie[96];
 
 void web_session_rotate(void)
 {
@@ -95,7 +111,6 @@ bool web_require_session(httpd_req_t *req)
 
 void web_session_set_cookie(httpd_req_t *req)
 {
-    char cookie[96];
-    snprintf(cookie, sizeof(cookie), "gw_session=%s; Path=/; HttpOnly; SameSite=Strict", session_token);
-    httpd_resp_set_hdr(req, "Set-Cookie", cookie);
+    snprintf(session_cookie, sizeof(session_cookie), "gw_session=%s; Path=/; HttpOnly; SameSite=Strict", session_token);
+    httpd_resp_set_hdr(req, "Set-Cookie", session_cookie);
 }

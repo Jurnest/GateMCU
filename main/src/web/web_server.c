@@ -15,7 +15,7 @@ void setup_web_start(void)
 {
     web_session_rotate();
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 26;
+    config.max_uri_handlers = 30;
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) != ESP_OK) return;
     httpd_uri_t home = {.uri = "/", .method = HTTP_GET, .handler = web_home_handler};
@@ -25,13 +25,16 @@ void setup_web_start(void)
     httpd_uri_t wireguard_page = {.uri = "/wireguard", .method = HTTP_GET, .handler = web_dashboard_page};
     httpd_uri_t forwards_page = {.uri = "/forwards", .method = HTTP_GET, .handler = web_dashboard_page};
     httpd_uri_t settings_page = {.uri = "/settings", .method = HTTP_GET, .handler = web_dashboard_page};
-    httpd_uri_t system_page = {.uri = "/system", .method = HTTP_GET, .handler = web_dashboard_page};
+    httpd_uri_t logs_page = {.uri = "/logs", .method = HTTP_GET, .handler = web_dashboard_page};
     httpd_uri_t wifi = {.uri = "/wifi", .method = HTTP_POST, .handler = web_wifi_post_handler};
     httpd_uri_t status = {.uri = "/status", .method = HTTP_GET, .handler = web_status_handler};
     httpd_uri_t setup_status = {.uri = "/setup/status", .method = HTTP_GET, .handler = web_setup_status_handler};
     httpd_uri_t wireguard = {.uri = "/wireguard", .method = HTTP_POST, .handler = web_wireguard_post_handler};
     httpd_uri_t wireguard_toggle = {.uri = "/wireguard/toggle", .method = HTTP_POST, .handler = web_wireguard_toggle_handler};
     httpd_uri_t forward = {.uri = "/forward", .method = HTTP_POST, .handler = web_forward_post_handler};
+    httpd_uri_t forward_update = {.uri = "/forward/update", .method = HTTP_POST, .handler = web_forward_update_handler};
+    httpd_uri_t forward_delete = {.uri = "/forward/delete", .method = HTTP_POST, .handler = web_forward_delete_handler};
+    httpd_uri_t logs = {.uri = "/logs/data", .method = HTTP_GET, .handler = web_event_log_handler};
     httpd_uri_t settings_wifi = {.uri = "/settings/wifi", .method = HTTP_POST, .handler = web_settings_wifi_handler};
     httpd_uri_t password = {.uri = "/password", .method = HTTP_POST, .handler = web_password_post_handler};
     httpd_uri_t restart = {.uri = "/restart", .method = HTTP_POST, .handler = web_restart_post_handler};
@@ -42,13 +45,16 @@ void setup_web_start(void)
     httpd_register_uri_handler(server, &wireguard_page);
     httpd_register_uri_handler(server, &forwards_page);
     httpd_register_uri_handler(server, &settings_page);
-    httpd_register_uri_handler(server, &system_page);
+    httpd_register_uri_handler(server, &logs_page);
     httpd_register_uri_handler(server, &wifi);
     httpd_register_uri_handler(server, &status);
     httpd_register_uri_handler(server, &setup_status);
     httpd_register_uri_handler(server, &wireguard);
     httpd_register_uri_handler(server, &wireguard_toggle);
     httpd_register_uri_handler(server, &forward);
+    httpd_register_uri_handler(server, &forward_update);
+    httpd_register_uri_handler(server, &forward_delete);
+    httpd_register_uri_handler(server, &logs);
     httpd_register_uri_handler(server, &settings_wifi);
     httpd_register_uri_handler(server, &password);
     httpd_register_uri_handler(server, &restart);

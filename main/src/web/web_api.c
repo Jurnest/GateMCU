@@ -4,7 +4,6 @@
 #include "gateway.h"
 #include "web_internal.h"
 #include "esp_system.h"
-#include "esp_clk.h"
 #include "esp_partition.h"
 #include "esp_image_format.h"
 #include "esp_heap_caps.h"
@@ -13,35 +12,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static uint32_t current_cpu_load_percent(void)
-{
-    static TaskStatus_t tasks[32];
-    static uint32_t previous_total, previous_idle;
-    uint32_t total = 0, idle = 0;
-    UBaseType_t count = uxTaskGetSystemState(tasks, sizeof(tasks) / sizeof(tasks[0]), &total);
-    TaskHandle_t idle_handle = xTaskGetIdleTaskHandle();
-    if (!count || !idle_handle) return 0;
-    for (UBaseType_t i = 0; i < count; i++) {
-        if (tasks[i].xHandle == idle_handle) {
-            idle = tasks[i].ulRunTimeCounter;
-            break;
-        }
-    }
-    uint32_t elapsed = total - previous_total;
-    uint32_t idle_elapsed = idle - previous_idle;
-    previous_total = total;
-    previous_idle = idle;
-    if (!elapsed) return 0;
-    if (idle_elapsed > elapsed) idle_elapsed = elapsed;
-    return (uint32_t)(((uint64_t)(elapsed - idle_elapsed) * 100U) / elapsed);
-}
-
 esp_err_t web_login_post(httpd_req_t *req)
 {
     char body[256] = {0}, password[64] = {0};
-    if (req->content_len <= 0 || req->content_len >= sizeof(body)) return web_send_error(req, "Invalid login form");
-    int received = httpd_req_recv(req, body, req->content_len);
-    if (received != req->content_len || !web_get_form_value(body, "password", password, sizeof(password))) return web_send_error(req, "Invalid login form");
+    if (!web_read_body(req, body, sizeof(body)) || !web_get_form_value(body, "password", password, sizeof(password))) return web_send_error(req, "Invalid login form");
     bool valid = gateway_auth_verify(password);
     memset(password, 0, sizeof(password));
     if (!valid) {
@@ -67,9 +41,7 @@ esp_err_t web_logout_post(httpd_req_t *req)
 esp_err_t web_wifi_post_handler(httpd_req_t *req)
 {
     char body[768] = {0}, ssid[33] = {0}, password[64] = {0}, admin_password[64] = {0}, admin_confirm[64] = {0};
-    if (req->content_len <= 0 || req->content_len >= sizeof(body)) return web_send_error(req, "Invalid form");
-    int received = httpd_req_recv(req, body, req->content_len);
-    if (received != req->content_len) return web_send_error(req, "Incomplete form");
+    if (!web_read_body(req, body, sizeof(body))) return web_send_error(req, "Invalid or incomplete form");
     if (!web_get_form_value(body, "ssid", ssid, sizeof(ssid)) || !ssid[0] || !web_get_form_value(body, "password", password, sizeof(password)) ||
         !web_get_form_value(body, "admin_password", admin_password, sizeof(admin_password)) || !web_get_form_value(body, "admin_confirm", admin_confirm, sizeof(admin_confirm)))
         return web_send_error(req, "SSID, Wi-Fi password and admin password fields are required");
@@ -176,9 +148,6 @@ esp_err_t web_status_handler(httpd_req_t *req)
     const esp_partition_t *nvs = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
     uint32_t free_heap = authenticated ? esp_get_free_heap_size() : 0;
     uint32_t min_heap = authenticated ? esp_get_minimum_free_heap_size() : 0;
-    uint32_t cpu_load = authenticated ? current_cpu_load_percent() : 0;
-    uint32_t cpu_mhz = authenticated ? (uint32_t)(esp_clk_cpu_freq() / 1000000) : 0;
-    uint32_t task_count = authenticated ? (uint32_t)uxTaskGetNumberOfTasks() : 0;
     uint32_t flash_size = authenticated ? (uint32_t)spi_flash_get_chip_size() : 0;
     static uint32_t app_image_size;
     static bool app_image_checked;
@@ -199,9 +168,9 @@ esp_err_t web_status_handler(httpd_req_t *req)
     const char *state = gateway_wifi_state() == GATEWAY_WIFI_CONNECTED ? "connected" :
                         gateway_wifi_state() == GATEWAY_WIFI_CONNECTING ? "connecting" :
                         gateway_wifi_state() == GATEWAY_WIFI_FAILED ? "failed" : "setup";
-    int length = snprintf(response, sizeof(response), "{\"state\":\"%s\",\"wifi_reason\":%u,\"ip\":\"%s\",\"ssid\":\"%s\",\"ip_mode\":\"%s\",\"static_ip\":\"%s\",\"gateway\":\"%s\",\"netmask\":\"%s\",\"tunnel_ip\":\"%s\",\"wg\":\"%s\",\"wg_enabled\":%s,\"heap_free\":%u,\"heap_total\":%u,\"heap_min\":%u,\"cpu_load\":%u,\"cpu_mhz\":%u,\"cpu_tasks\":%u,\"flash_bytes\":%u,\"app_bytes\":%u,\"app_capacity\":%u,\"nvs_bytes\":%u,\"uptime\":%u,\"rules\":[", state, gateway_wifi_disconnect_reason(), ip, ssid_json, use_static_ip ? "static" : "dhcp", static_ip, wifi_gateway, netmask, tunnel_ip, authenticated ? gateway_wireguard_status() : "", gateway_wireguard_is_enabled() ? "true" : "false", free_heap, heap_total, min_heap, cpu_load, cpu_mhz, task_count, flash_size, app_size, app_capacity, nvs_size, uptime);
+    int length = snprintf(response, sizeof(response), "{\"state\":\"%s\",\"wifi_reason\":%u,\"ip\":\"%s\",\"ssid\":\"%s\",\"ip_mode\":\"%s\",\"static_ip\":\"%s\",\"gateway\":\"%s\",\"netmask\":\"%s\",\"tunnel_ip\":\"%s\",\"wg\":\"%s\",\"wg_enabled\":%s,\"heap_free\":%u,\"heap_total\":%u,\"heap_min\":%u,\"flash_bytes\":%u,\"app_bytes\":%u,\"app_capacity\":%u,\"nvs_bytes\":%u,\"uptime\":%u,\"rules\":[", state, gateway_wifi_disconnect_reason(), ip, ssid_json, use_static_ip ? "static" : "dhcp", static_ip, wifi_gateway, netmask, tunnel_ip, authenticated ? gateway_wireguard_status() : "", gateway_wireguard_is_enabled() ? "true" : "false", free_heap, heap_total, min_heap, flash_size, app_size, app_capacity, nvs_size, uptime);
     for (size_t i = 0; i < count && length > 0 && length < sizeof(response); i++) {
-        length += snprintf(response + length, sizeof(response) - length, "%s{\"listen_port\":%u,\"target_ip\":\"%s\",\"target_port\":%u}", i ? "," : "", rules[i].listen_port, rules[i].target_ip, rules[i].target_port);
+        length += snprintf(response + length, sizeof(response) - length, "%s{\"index\":%u,\"listen_port\":%u,\"target_ip\":\"%s\",\"target_port\":%u}", i ? "," : "", rules[i].index, rules[i].listen_port, rules[i].target_ip, rules[i].target_port);
     }
     if (length > 0 && length < sizeof(response)) length += snprintf(response + length, sizeof(response) - length, "]}");
     httpd_resp_set_type(req, "application/json");
@@ -227,9 +196,7 @@ esp_err_t web_wireguard_post_handler(httpd_req_t *req)
     if (!web_require_session(req)) return ESP_OK;
     char body[768] = {0}, config_text[640] = {0};
     gateway_wireguard_config_t config = {0};
-    if (req->content_len <= 0 || req->content_len >= sizeof(body)) return web_send_error(req, "Invalid WireGuard form");
-    int received = httpd_req_recv(req, body, req->content_len);
-    if (received != req->content_len) return web_send_error(req, "Incomplete form");
+    if (!web_read_body(req, body, sizeof(body))) return web_send_error(req, "Invalid or incomplete WireGuard form");
     if (!web_get_form_value(body, "config", config_text, sizeof(config_text)) || !parse_wireguard_conf(config_text, &config))
         return web_send_error(req, "Config must include PrivateKey, Address, Peer PublicKey and Endpoint");
     esp_err_t err = gateway_wireguard_save(&config);
@@ -242,9 +209,7 @@ esp_err_t web_wireguard_toggle_handler(httpd_req_t *req)
 {
     if (!web_require_session(req)) return ESP_OK;
     char body[32] = {0}, value[8] = {0};
-    if (req->content_len <= 0 || req->content_len >= sizeof(body)) return web_send_error(req, "Invalid WireGuard action");
-    int received = httpd_req_recv(req, body, req->content_len);
-    if (received != req->content_len || !web_get_form_value(body, "enabled", value, sizeof(value))) return web_send_error(req, "WireGuard action is required");
+    if (!web_read_body(req, body, sizeof(body)) || !web_get_form_value(body, "enabled", value, sizeof(value))) return web_send_error(req, "WireGuard action is required");
     if (strcmp(value, "0") != 0 && strcmp(value, "1") != 0) return web_send_error(req, "Invalid WireGuard action");
     esp_err_t err = gateway_wireguard_set_enabled(value[0] == '1');
     if (err != ESP_OK) return web_send_error(req, "Could not change WireGuard state");
@@ -255,9 +220,7 @@ esp_err_t web_forward_post_handler(httpd_req_t *req)
 {
     if (!web_require_session(req)) return ESP_OK;
     char body[192] = {0}, value[16] = {0}, target_ip[16] = {0};
-    if (req->content_len <= 0 || req->content_len >= sizeof(body)) return web_send_error(req, "Invalid forwarding form");
-    int received = httpd_req_recv(req, body, req->content_len);
-    if (received != req->content_len) return web_send_error(req, "Incomplete form");
+    if (!web_read_body(req, body, sizeof(body))) return web_send_error(req, "Invalid or incomplete forwarding form");
     if (!web_get_form_value(body, "listen_port", value, sizeof(value))) return web_send_error(req, "Listen port is required");
     unsigned long listen_port = strtoul(value, NULL, 10);
     if (!web_get_form_value(body, "target_port", value, sizeof(value))) return web_send_error(req, "Target port is required");
@@ -270,15 +233,81 @@ esp_err_t web_forward_post_handler(httpd_req_t *req)
     return httpd_resp_send(req, "TCP forwarding rule saved", strlen("TCP forwarding rule saved"));
 }
 
+static bool web_parse_forward_form(httpd_req_t *req, char *body, size_t body_capacity,
+                                   char *value, size_t value_capacity, uint16_t *listen_port,
+                                   char *target_ip, uint16_t *target_port)
+{
+    if (!web_read_body(req, body, body_capacity) ||
+        !web_get_form_value(body, "listen_port", value, value_capacity)) return false;
+    unsigned long input = strtoul(value, NULL, 10);
+    if (!input || input > 65535) return false;
+    *listen_port = (uint16_t)input;
+    if (!web_get_form_value(body, "target_port", value, value_capacity)) return false;
+    input = strtoul(value, NULL, 10);
+    if (!input || input > 65535) return false;
+    *target_port = (uint16_t)input;
+    ip4_addr_t parsed;
+    return web_get_form_value(body, "target_ip", target_ip, 16) && ip4addr_aton(target_ip, &parsed);
+}
+
+esp_err_t web_forward_update_handler(httpd_req_t *req)
+{
+    if (!web_require_session(req)) return ESP_OK;
+    char body[192] = {0}, value[16] = {0}, target_ip[16] = {0};
+    uint16_t listen_port, target_port;
+    if (!web_parse_forward_form(req, body, sizeof(body), value, sizeof(value), &listen_port, target_ip, &target_port) ||
+        !web_get_form_value(body, "index", value, sizeof(value))) return web_send_error(req, "Invalid forwarding rule");
+    unsigned long index = strtoul(value, NULL, 10);
+    if (index >= 3) return web_send_error(req, "Invalid rule index");
+    esp_err_t err = gateway_forward_update((uint8_t)index, listen_port, target_ip, target_port);
+    if (err != ESP_OK) return web_send_error(req, "Could not update forwarding rule");
+    return httpd_resp_send(req, "TCP forwarding rule updated", strlen("TCP forwarding rule updated"));
+}
+
+esp_err_t web_forward_delete_handler(httpd_req_t *req)
+{
+    if (!web_require_session(req)) return ESP_OK;
+    char body[48] = {0}, value[16] = {0};
+    if (!web_read_body(req, body, sizeof(body)) || !web_get_form_value(body, "index", value, sizeof(value)))
+        return web_send_error(req, "Rule index is required");
+    unsigned long index = strtoul(value, NULL, 10);
+    if (index >= 3 || gateway_forward_delete((uint8_t)index) != ESP_OK) return web_send_error(req, "Could not delete forwarding rule");
+    return httpd_resp_send(req, "TCP forwarding rule deleted", strlen("TCP forwarding rule deleted"));
+}
+
+esp_err_t web_event_log_handler(httpd_req_t *req)
+{
+    if (!web_require_session(req)) return ESP_OK;
+    gateway_event_t events[24];
+    size_t count = gateway_event_log_list(events, sizeof(events) / sizeof(events[0]));
+    if (count > sizeof(events) / sizeof(events[0])) count = sizeof(events) / sizeof(events[0]);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    esp_err_t err = httpd_resp_send_chunk(req, "[", 1);
+    TickType_t now = xTaskGetTickCount();
+    for (size_t i = 0; err == ESP_OK && i < count; i++) {
+        const char *type = events[i].type == 1 ? "accepted" : events[i].type == 2 ? "connected" :
+                           events[i].type == 3 ? "failed" : "closed";
+        uint32_t age = (uint32_t)((now - events[i].tick) * portTICK_PERIOD_MS / 1000U);
+        char item[180];
+        int len = snprintf(item, sizeof(item), "%s{\"age\":%u,\"event\":\"%s\",\"source\":\"%s\",\"listen_port\":%u,\"target\":\"%s\",\"target_port\":%u,\"bytes\":%u,\"duration_ms\":%u,\"error\":%d}",
+                           i ? "," : "", age, type, events[i].source_ip, events[i].listen_port,
+                           events[i].target_ip, events[i].target_port, events[i].bytes,
+                           events[i].duration_ms, events[i].error);
+        err = httpd_resp_send_chunk(req, item, len);
+    }
+    if (err == ESP_OK) err = httpd_resp_send_chunk(req, "]", 1);
+    if (err == ESP_OK) err = httpd_resp_send_chunk(req, NULL, 0);
+    return err;
+}
+
 esp_err_t web_settings_wifi_handler(httpd_req_t *req)
 {
     if (!web_require_session(req)) return ESP_OK;
     char body[384] = {0}, ssid[33] = {0}, password[64] = {0}, mode[12] = {0};
     char ip[16] = {0}, gateway[16] = {0}, netmask[16] = {0};
     char old_ssid[33] = {0}, old_password[64] = {0};
-    if (req->content_len <= 0 || req->content_len >= sizeof(body)) return web_send_error(req, "Invalid Wi-Fi form");
-    int received = httpd_req_recv(req, body, req->content_len);
-    if (received != req->content_len) return web_send_error(req, "Incomplete form");
+    if (!web_read_body(req, body, sizeof(body))) return web_send_error(req, "Invalid or incomplete Wi-Fi form");
     if (!web_get_form_value(body, "ssid", ssid, sizeof(ssid)) || !ssid[0] || !web_get_form_value(body, "password", password, sizeof(password)))
         return web_send_error(req, "SSID and Wi-Fi password fields are required");
     gateway_wifi_get_settings(old_ssid, sizeof(old_ssid), old_password, sizeof(old_password), NULL,
@@ -302,12 +331,20 @@ esp_err_t web_settings_wifi_handler(httpd_req_t *req)
 esp_err_t web_password_post_handler(httpd_req_t *req)
 {
     if (!web_require_session(req)) return ESP_OK;
-    char body[256] = {0}, password[64] = {0};
-    if (req->content_len <= 0 || req->content_len >= sizeof(body)) return web_send_error(req, "Invalid password form");
-    int received = httpd_req_recv(req, body, req->content_len);
-    if (received != req->content_len) return web_send_error(req, "Incomplete form");
-    if (!web_get_form_value(body, "password", password, sizeof(password)) || strlen(password) < 8)
+    char body[384] = {0}, current_password[64] = {0}, password[64] = {0};
+    if (!web_read_body(req, body, sizeof(body))) return web_send_error(req, "Invalid or incomplete password form");
+    if (!web_get_form_value(body, "current_password", current_password, sizeof(current_password)) ||
+        !web_get_form_value(body, "password", password, sizeof(password)) || strlen(password) < 8) {
+        memset(current_password, 0, sizeof(current_password));
+        memset(password, 0, sizeof(password));
         return web_send_error(req, "Password must contain at least 8 characters");
+    }
+    if (!gateway_auth_verify(current_password)) {
+        memset(current_password, 0, sizeof(current_password));
+        memset(password, 0, sizeof(password));
+        return web_send_error(req, "Current password is incorrect");
+    }
+    memset(current_password, 0, sizeof(current_password));
     esp_err_t err = gateway_auth_store(password);
     memset(password, 0, sizeof(password));
     if (err != ESP_OK) return web_send_error(req, "Could not save password");

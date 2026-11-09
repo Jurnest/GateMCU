@@ -27,11 +27,24 @@ typedef struct {
 } gateway_wireguard_config_t;
 
 typedef struct {
+    uint8_t index;
     uint16_t listen_port;
     char target_ip[16];
     uint16_t target_port;
     bool enabled;
 } gateway_forward_rule_t;
+
+typedef struct {
+    uint32_t tick;
+    uint32_t bytes;
+    uint32_t duration_ms;
+    uint16_t listen_port;
+    uint16_t target_port;
+    uint8_t type;
+    int16_t error;
+    char source_ip[16];
+    char target_ip[16];
+} gateway_event_t;
 
 void gateway_wifi_init(void);
 esp_err_t gateway_wifi_connect(const char *ssid, const char *password);
@@ -50,9 +63,15 @@ const char *gateway_wireguard_status(void);
 void gateway_wireguard_tunnel_ip(char *out, size_t capacity);
 
 esp_err_t gateway_forward_add(uint16_t listen_port, const char *target_ip, uint16_t target_port);
+esp_err_t gateway_forward_update(uint8_t index, uint16_t listen_port, const char *target_ip, uint16_t target_port);
+esp_err_t gateway_forward_delete(uint8_t index);
 size_t gateway_forward_list(gateway_forward_rule_t *out, size_t capacity);
 void gateway_forward_start(const char *tunnel_ip);
 void gateway_forward_stop(void);
+void gateway_event_log_add(uint8_t type, const char *source_ip, uint16_t listen_port,
+                           const char *target_ip, uint16_t target_port, uint32_t bytes,
+                           uint32_t duration_ms, int error);
+size_t gateway_event_log_list(gateway_event_t *out, size_t capacity);
 
 void setup_web_start(void);
 void captive_dns_start(void);

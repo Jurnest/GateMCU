@@ -21,6 +21,7 @@ static char current_ip[16] = "";
 static unsigned retries;
 static uint8_t last_disconnect_reason;
 static bool ap_shutdown_scheduled;
+static uint32_t ap_generation;
 static bool pending_credentials;
 static bool ignore_next_disconnect;
 static char pending_ssid[33];
@@ -56,11 +57,13 @@ static bool read_setting(const char *key, char *out, size_t capacity)
 
 static void close_setup_ap_task(void *arg)
 {
+    uint32_t generation = (uint32_t)(uintptr_t)arg;
     vTaskDelay(pdMS_TO_TICKS(30000));
-    // A later connection attempt may have started while this delay was running.
-    // Only close onboarding AP if the same successful connection is still active.
-    if (state == GATEWAY_WIFI_CONNECTED && ap_shutdown_scheduled)
-        esp_wifi_set_mode(WIFI_MODE_STA);
+    if (generation == ap_generation && state == GATEWAY_WIFI_CONNECTED && ap_shutdown_scheduled) {
+        esp_err_t err = esp_wifi_set_mode(WIFI_MODE_STA);
+        if (err != ESP_OK) ESP_LOGW(TAG, "Could not close setup AP: %s", esp_err_to_name(err));
+        ap_shutdown_scheduled = false;
+    }
     vTaskDelete(NULL);
 }
 
@@ -73,6 +76,15 @@ static void wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         last_disconnect_reason = event ? event->reason : 0;
         if (ignore_next_disconnect) {
             ignore_next_disconnect = false;
+        } else if (state == GATEWAY_WIFI_CONNECTED) {
+            ESP_LOGW(TAG, "Wi-Fi disconnected (reason %u); reconnecting", last_disconnect_reason);
+            state = GATEWAY_WIFI_CONNECTING;
+            current_ip[0] = '\0';
+            retries = 0;
+            ap_shutdown_scheduled = false;
+            ap_generation++;
+            esp_wifi_set_mode(WIFI_MODE_APSTA);
+            esp_wifi_connect();
         } else if (state == GATEWAY_WIFI_CONNECTING && retries++ < 10) {
             esp_wifi_connect();
         } else if (state == GATEWAY_WIFI_CONNECTING) {
@@ -90,15 +102,19 @@ static void wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
             pending_credentials = false;
         }
         state = GATEWAY_WIFI_CONNECTED;
-        if (mdns_init() == ESP_OK) {
-            mdns_hostname_set("gatemcu");
-            mdns_instance_name_set("GateMCU Gateway");
-        }
+        // Re-announce once the STA interface is fully up. On ESP8266 RTOS SDK,
+        // mDNS may be initialized before Wi-Fi but has no active STA PCB yet.
+        esp_err_t mdns_err = mdns_hostname_set("gatemcu");
+        if (mdns_err != ESP_OK) ESP_LOGW(TAG, "Could not announce mDNS hostname: %s", esp_err_to_name(mdns_err));
         gateway_wireguard_start();
         ESP_LOGI(TAG, "Connected; address is %s", current_ip);
         if (!ap_shutdown_scheduled) {
             ap_shutdown_scheduled = true;
-            xTaskCreate(close_setup_ap_task, "close_setup_ap", 1024, NULL, 3, NULL);
+            uint32_t generation = ++ap_generation;
+            if (xTaskCreate(close_setup_ap_task, "close_setup_ap", 1024, (void *)(uintptr_t)generation, 3, NULL) != pdPASS) {
+                ap_shutdown_scheduled = false;
+                ESP_LOGW(TAG, "Could not schedule setup AP shutdown");
+            }
         }
     }
 }
@@ -133,12 +149,22 @@ esp_err_t gateway_wifi_connect_with_ip(const char *ssid, const char *password, b
     state = GATEWAY_WIFI_CONNECTING;
     current_ip[0] = '\0';
     ap_shutdown_scheduled = false;
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    esp_err_t err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    if (err != ESP_OK) {
+        pending_credentials = false;
+        state = GATEWAY_WIFI_FAILED;
+        return err;
+    }
     if (disconnect_current) {
         ignore_next_disconnect = true;
         if (esp_wifi_disconnect() != ESP_OK) ignore_next_disconnect = false;
     }
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &station));
+    err = esp_wifi_set_config(ESP_IF_WIFI_STA, &station);
+    if (err != ESP_OK) {
+        pending_credentials = false;
+        state = GATEWAY_WIFI_FAILED;
+        return err;
+    }
     if (use_static_ip) {
         tcpip_adapter_dhcpc_stop(TCPIP_ADAPTER_IF_STA);
         tcpip_adapter_ip_info_t info = {0};
@@ -146,12 +172,36 @@ esp_err_t gateway_wifi_connect_with_ip(const char *ssid, const char *password, b
         ip4addr_aton(gateway, &info.gw);
         ip4addr_aton(netmask, &info.netmask);
         esp_err_t ip_err = tcpip_adapter_set_ip_info(TCPIP_ADAPTER_IF_STA, &info);
-        if (ip_err != ESP_OK) return ip_err;
+        if (ip_err != ESP_OK) {
+            pending_credentials = false;
+            state = GATEWAY_WIFI_FAILED;
+            return ip_err;
+        }
+        // Static IP disables DHCP, so the adapter will not learn a DNS
+        // resolver automatically. Use the configured LAN gateway as DNS.
+        tcpip_adapter_dns_info_t dns = {0};
+        dns.ip.type = IPADDR_TYPE_V4;
+        if (!ip4addr_aton(gateway, ip_2_ip4(&dns.ip))) {
+            pending_credentials = false;
+            state = GATEWAY_WIFI_FAILED;
+            return ESP_ERR_INVALID_ARG;
+        }
+        esp_err_t dns_err = tcpip_adapter_set_dns_info(TCPIP_ADAPTER_IF_STA, TCPIP_ADAPTER_DNS_MAIN, &dns);
+        if (dns_err != ESP_OK) ESP_LOGW(TAG, "Could not set static DNS to gateway: %s", esp_err_to_name(dns_err));
     } else {
         esp_err_t dhcp_err = tcpip_adapter_dhcpc_start(TCPIP_ADAPTER_IF_STA);
-        if (dhcp_err != ESP_OK && dhcp_err != ESP_ERR_TCPIP_ADAPTER_DHCP_ALREADY_STARTED) return dhcp_err;
+        if (dhcp_err != ESP_OK && dhcp_err != ESP_ERR_TCPIP_ADAPTER_DHCP_ALREADY_STARTED) {
+            pending_credentials = false;
+            state = GATEWAY_WIFI_FAILED;
+            return dhcp_err;
+        }
     }
-    return esp_wifi_connect();
+    err = esp_wifi_connect();
+    if (err != ESP_OK) {
+        pending_credentials = false;
+        state = GATEWAY_WIFI_FAILED;
+    }
+    return err;
 }
 
 void gateway_wifi_get_settings(char *ssid, size_t ssid_capacity, char *password, size_t password_capacity, bool *use_static_ip, char *ip, size_t ip_capacity, char *gateway, size_t gateway_capacity, char *netmask, size_t netmask_capacity)
@@ -203,6 +253,16 @@ void gateway_wifi_init(void)
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event, NULL));
 
+    // Start mDNS before Wi-Fi obtains an address so its IP event handler is
+    // already registered when the station joins the LAN.
+    err = mdns_init();
+    if (err == ESP_OK) {
+        err = mdns_hostname_set("gatemcu");
+        if (err == ESP_OK) err = mdns_instance_name_set("GateMCU Gateway");
+        if (err == ESP_OK) err = mdns_service_add("GateMCU", "_http", "_tcp", 80, NULL, 0);
+    }
+    if (err != ESP_OK) ESP_LOGE(TAG, "mDNS startup failed: %s", esp_err_to_name(err));
+
     wifi_config_t ap = {0};
     strlcpy((char *)ap.ap.ssid, CONFIG_GATEWAY_SETUP_AP_NAME, sizeof(ap.ap.ssid));
     ap.ap.channel = 1;
@@ -227,6 +287,15 @@ void gateway_wifi_init(void)
             read_setting("wifi_ip", ip, sizeof(ip));
             read_setting("wifi_gw", gateway, sizeof(gateway));
             read_setting("wifi_mask", netmask, sizeof(netmask));
+            /* Repair the previously saved reversed values for this LAN. */
+            if (strcmp(ip, "192.168.1.1") == 0 && strcmp(gateway, "192.168.1.111") == 0 &&
+                strcmp(netmask, "255.255.255.0") == 0) {
+                strlcpy(ip, "192.168.1.111", sizeof(ip));
+                strlcpy(gateway, "192.168.1.1", sizeof(gateway));
+                esp_err_t repair_err = save_credentials(ssid, password, true, ip, gateway, netmask);
+                if (repair_err == ESP_OK) ESP_LOGW(TAG, "Repaired reversed static IP and gateway settings");
+                else ESP_LOGE(TAG, "Could not save repaired IP settings: %s", esp_err_to_name(repair_err));
+            }
         }
         gateway_wifi_connect_with_ip(ssid, password, use_static_ip, ip, gateway, netmask);
     }

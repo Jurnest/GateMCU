@@ -10,6 +10,7 @@ bool web_session_is_valid(httpd_req_t *req);
 bool web_require_session(httpd_req_t *req);
 void web_session_set_cookie(httpd_req_t *req);
 bool web_get_form_value(const char *body, const char *name, char *out, size_t capacity);
+bool web_read_body(httpd_req_t *req, char *out, size_t capacity);
 esp_err_t web_send_error(httpd_req_t *req, const char *message);
 
 esp_err_t web_login_page(httpd_req_t *req);
@@ -24,6 +25,9 @@ esp_err_t web_setup_status_handler(httpd_req_t *req);
 esp_err_t web_wireguard_post_handler(httpd_req_t *req);
 esp_err_t web_wireguard_toggle_handler(httpd_req_t *req);
 esp_err_t web_forward_post_handler(httpd_req_t *req);
+esp_err_t web_forward_update_handler(httpd_req_t *req);
+esp_err_t web_forward_delete_handler(httpd_req_t *req);
+esp_err_t web_event_log_handler(httpd_req_t *req);
 esp_err_t web_settings_wifi_handler(httpd_req_t *req);
 esp_err_t web_password_post_handler(httpd_req_t *req);
 esp_err_t web_restart_post_handler(httpd_req_t *req);
