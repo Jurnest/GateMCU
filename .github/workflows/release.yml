@@ -37,6 +37,11 @@ jobs:
           set -euo pipefail
           sdk_path="$RUNNER_TEMP/ESP8266_RTOS_SDK"
           export IDF_TOOLS_PATH="$RUNNER_TEMP/esp-tools"
+          # The SDK's pinned libcoap revision refers to TinyDTLS through an
+          # Eclipse Git URL that now redirects to a GitHub organization page.
+          git config --global \
+            url."https://github.com/eclipse/tinydtls.git".insteadOf \
+            "https://git.eclipse.org/r/tinydtls/org.eclipse.tinydtls"
           git clone --depth 1 --branch v3.4 --recursive \
             https://github.com/espressif/ESP8266_RTOS_SDK.git "$sdk_path"
           "$sdk_path/install.sh"
