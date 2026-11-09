@@ -1,0 +1,96 @@
+name: Bug report
+description: Report a GateMCU firmware, installer, or build problem.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before submitting, search for a similar issue. Never include Wi-Fi or GateMCU passwords, WireGuard private keys or preshared keys. Redact public IP addresses, hostnames, and other sensitive values from logs when needed.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Browser firmware installer
+        - Wi-Fi setup or network settings
+        - WireGuard tunnel
+        - TCP port forwarding
+        - Web interface or login
+        - Build or GitHub Actions
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: GateMCU version
+      description: Release tag or commit, if known. If the firmware never started, enter Unknown.
+      placeholder: v0.1.0
+    validations:
+      required: false
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and installation method
+      description: Include the board type and whether you used the browser installer or built from source.
+      placeholder: NodeMCU ESP8266, installed with the browser installer
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      description: Required for installer or web interface issues; otherwise leave blank.
+      placeholder: Chrome 130 on Windows 11
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the shortest sequence of actions that reproduces the problem.
+      placeholder: |
+        1. Open…
+        2. Select…
+        3. Observe…
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect GateMCU to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include any error message shown.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Add only relevant details. Remove passwords, WireGuard keys, and any sensitive network information first.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and removed sensitive information from logs and screenshots.
+          required: true

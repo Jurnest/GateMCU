@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest a specific improvement to GateMCU.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Keep the request focused on a real use case; do not include passwords, WireGuard keys, or other secrets.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what currently makes it difficult?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed behavior
+      description: Describe what you would like GateMCU to do from a user's perspective.
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: Who benefits, and how?
+      description: Mention how often this comes up or which users/devices it helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds or alternatives
+      description: Any current workaround or other approach you have considered.
+    validations:
+      required: false
