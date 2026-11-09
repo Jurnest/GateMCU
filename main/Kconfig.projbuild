@@ -1,0 +1,7 @@
+menu "GateMCU"
+
+config GATEWAY_SETUP_AP_NAME
+    string "Setup access point name"
+    default "GateMCU-Setup"
+
+endmenu
